@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 
 const require = createRequire(import.meta.url);
 const mainFile = fileURLToPath(new URL("../electron/main.cjs", import.meta.url));
+const mainRequire = createRequire(mainFile);
 const mainSource = readFileSync(mainFile, "utf8");
 
 /** Decline the single-instance lock so normal boot never spawns a server.
@@ -27,7 +28,11 @@ function windowOptions(platform: string) {
 		session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } },
 	};
 	const context = {
-		require: (id: string) => id === "electron" ? electron : require(id),
+		require: (id: string) => id === "electron" ? electron : id === "./oauth-security.cjs"
+			// This test exercises window chrome after declining startup. Profile
+			// setup has its own isolated tests; never create a real userData here.
+			? { ...mainRequire(id), configureUserData() {} }
+			: mainRequire(id),
 		process: { platform, argv: [], env: {}, on() {} },
 		__dirname: dirname(mainFile),
 	};
@@ -144,6 +149,41 @@ describe("workflow action versions", () => {
 			assert.deepEqual([...observed].sort(), expected.sort());
 		});
 	}
+});
+
+describe("OAuth cross-platform CI", () => {
+	type Step = { name?: string; run?: string; if?: string; env?: Record<string, string> };
+	type Workflow = {
+		permissions: Record<string, string>;
+		jobs: Record<string, { steps: Step[]; strategy?: { matrix: { include: { os: string }[] } } }>;
+	};
+	const yaml = require("js-yaml") as { load(source: string): Workflow };
+	const workflow = yaml.load(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
+	const job = workflow.jobs.standalone;
+	assert.ok(job);
+
+	it("runs protocol, rotating vault, request isolation, and desktop tests on every build OS", () => {
+		assert.deepEqual(job.strategy?.matrix.include.map(({ os }) => os).sort(), ["macos-15", "ubuntu-24.04", "windows-2025"]);
+		const test = job.steps.find(({ name }) => name === "OAuth protocol, vault, and desktop security on this OS");
+		assert.ok(test?.run);
+		assert.equal(test.if, undefined, "OAuth regression tests must run on all three OSes");
+		assert.equal(test.env?.NODE_ENV, "test");
+		for (const file of ["openai-oauth-flow", "openai-credentials", "openai-auth-service", "openai-plan-request", "openai-desktop-security", "desktop-platform", "browser-service-lifetime"]) {
+			assert.ok(test.run.includes(`tests/${file}.test.ts`), `missing ${file} from the OS matrix`);
+		}
+	});
+
+	it("requires real protected persistence on Windows/macOS and refuses basic_text on Linux under Xvfb", () => {
+		const protectedStorage = job.steps.find(({ name }) => name === "Real OS-protected OAuth key persistence (Windows/macOS)");
+		assert.equal(protectedStorage?.if, "runner.os != 'Linux'");
+		assert.match(protectedStorage?.run ?? "", /electron\/cli\.js scripts\/smoke-oauth-storage\.cjs --expect-encrypted/);
+		const linux = job.steps.find(({ name }) => name === "Refuse Linux basic_text storage with real Electron");
+		assert.equal(linux?.if, "runner.os == 'Linux'");
+		assert.match(linux?.run ?? "", /^xvfb-run -a /);
+		assert.match(linux?.run ?? "", /--linux-basic --expect-unavailable/);
+		assert.equal(workflow.permissions.contents, "read");
+		assert.equal(job.steps.some(({ run }) => run?.includes("--publish")), false, "CI builds and verifies without publishing");
+	});
 });
 
 describe("desktop release workflow", () => {

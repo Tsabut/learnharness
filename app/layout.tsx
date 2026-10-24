@@ -7,6 +7,8 @@ import { ActivityProvider } from "@/components/activity-dock";
 import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
+import { OpenAIAuthProvider } from "@/components/openai-auth";
+import { OpenAIAuthServerSync } from "@/components/openai-auth-sync";
 
 // Chrome = JetBrains Mono, teaching prose = Source Sans 3, titles = CMU
 // Serif (the bundled lh-cmu @font-face in globals.css — no CDN).
@@ -25,13 +27,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			{/* The notification channel rides OUTSIDE everything: sidebar, dock,
 				 and pages all subscribe as the polls retire (push S3, 2026-10-02). */}
 			<ServerEventsProvider>
-				<AppearanceProvider>
-					<SidebarProvider>
-						<ActivityProvider>
-							<AppShell>{children}</AppShell>
-						</ActivityProvider>
-					</SidebarProvider>
-				</AppearanceProvider>
+				<OpenAIAuthProvider>
+					<OpenAIAuthServerSync />
+					<AppearanceProvider>
+						<SidebarProvider>
+							<ActivityProvider>
+								<AppShell>{children}</AppShell>
+							</ActivityProvider>
+						</SidebarProvider>
+					</AppearanceProvider>
+				</OpenAIAuthProvider>
 			</ServerEventsProvider>
 			{/* Auto-update banner (Wave C): fixed card, Electron-only pushes. */}
 			<UpdateBanner />

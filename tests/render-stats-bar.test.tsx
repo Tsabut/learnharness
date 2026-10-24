@@ -59,7 +59,8 @@ describe("stats bar", () => {
 		assert.match(html, /data-testid="stats-context">11k</);
 		// pi catalog price 0.15/0.5 per 1M (drifted in pi-ai 0.87.1):
 		// each turn 10k×0.15 + 1k×0.5 = $0.002 → two = $0.0040
-		assert.match(html, /data-testid="stats-cost">\$0\.0040</);
+		assert.match(html, /data-testid="stats-cost"[^>]*>\$0\.0040 <span[^>]*>API est\.<\/span>/);
+		assert.match(html, /title="API tariff estimate, not a ChatGPT plan charge"/);
 		// model button label: SSR (record fetch not run yet) reads "—" —
 		// the strong slot arrives client-side via GET /api/settings; the
 		// turn log below still folds the ACTUAL models billed
@@ -70,7 +71,7 @@ describe("stats bar", () => {
 		const html = renderToStaticMarkup(
 			<StatsBar turns={[turn({ model: "nope/unknown" })]} />,
 		);
-		assert.match(html, /data-testid="stats-cost">—</);
+		assert.match(html, /data-testid="stats-cost"[^>]*>— <span[^>]*>API est\.<\/span>/);
 		// unknown model: no catalog limit exists, but the footprint is
 		// still an honest reading — usage-only (never "—" theater over
 		// real data, never a fake window)

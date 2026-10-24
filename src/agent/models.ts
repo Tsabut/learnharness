@@ -1,6 +1,9 @@
 import {
 	clampThinkingLevel,
 	createModels,
+	InMemoryCredentialStore,
+	type CredentialStore,
+	type Provider,
 	getSupportedThinkingLevels,
 	type Api,
 	type Model,
@@ -43,7 +46,52 @@ export interface PiEngine {
 
 export type { ThinkingLevel };
 
-let collection: ReturnType<typeof createModels> | undefined;
+interface PiRuntime {
+	collection?: ReturnType<typeof createModels>;
+	credentials: CredentialStore;
+	openai?: Provider;
+	requestSignal?: () => AbortSignal;
+}
+const PI_RUNTIME = Symbol.for("lh.piModels");
+function runtime(): PiRuntime {
+	const root = globalThis as Record<symbol, PiRuntime | undefined>;
+	return root[PI_RUNTIME] ??= { credentials: new InMemoryCredentialStore() };
+}
+
+/** The server composition supplies persistence and provider policy; this layer never imports IO adapters. */
+export function configurePiModelsAuth(credentials: CredentialStore, openai: Provider, requestSignal?: () => AbortSignal): void {
+	const state = runtime();
+	state.credentials = credentials;
+	state.openai = openai;
+	state.requestSignal = requestSignal;
+	state.collection?.setProvider(openai);
+}
+
+/** Bind account generation BEFORE async credential resolution, including refresh lock waits. */
+export function scopePiRequests<T extends Models>(models: T, requestSignal: () => AbortSignal | undefined): T {
+	const operations = new Set(["stream", "streamSimple", "complete", "completeSimple", "getAuth"]);
+	return new Proxy(models, {
+		get(target, property, receiver) {
+			const value: unknown = Reflect.get(target, property, receiver);
+			if (typeof value !== "function") return value;
+			return (...args: unknown[]) => {
+				if (operations.has(String(property))) {
+					const subject = args[0];
+					const provider = typeof subject === "string" ? subject : subject && typeof subject === "object" && "provider" in subject ? subject.provider : undefined;
+					if (provider === "openai") {
+						const generation = requestSignal();
+						if (generation) {
+							const index = property === "getAuth" ? 1 : 2;
+							const options = (args[index] ?? {}) as { signal?: AbortSignal };
+							args[index] = { ...options, signal: options.signal ? AbortSignal.any([options.signal, generation]) : generation };
+						}
+					}
+				}
+				return Reflect.apply(value, target, args);
+			};
+		},
+	});
+}
 
 /** The process-wide pi-ai Models collection — EVERY builtin provider's
  *  catalog (model slots wave, 2026-09-20): engines and the picker resolve
@@ -54,11 +102,20 @@ let collection: ReturnType<typeof createModels> | undefined;
  *  honest, late, and unreachable through the picker, which gates on
  *  keyPresent. */
 export function piModels() {
-	if (!collection) {
-		collection = createModels({ identity: APP_IDENTITY });
-		for (const provider of builtinProviders()) collection.setProvider(provider);
+	const state = runtime();
+	if (!state.collection) {
+		// Delegate at call time: engines created before server composition still
+		// use the same collection and its subsequently injected credential store.
+		const credentials: CredentialStore = {
+			read: (...args) => state.credentials.read(...args),
+			list: (...args) => state.credentials.list(...args),
+			modify: (...args) => state.credentials.modify(...args),
+			delete: (...args) => state.credentials.delete(...args),
+		};
+		state.collection = scopePiRequests(createModels({ identity: APP_IDENTITY, credentials }), () => state.requestSignal?.());
+		for (const provider of builtinProviders()) state.collection.setProvider(provider.id === "openai" && state.openai ? state.openai : provider);
 	}
-	return collection;
+	return state.collection;
 }
 
 /** OpenRouter API key (BYOK); tests never read this — they inject engines. */

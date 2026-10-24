@@ -175,7 +175,7 @@ describe("setup polish interactions", () => {
 	it("the empty vision list gives the approved next action without an em dash", async () => {
 		await mount({ keyed: true });
 		await click(element('[data-testid="setup-trigger-vision"]'));
-		assert.ok(element('[data-testid="setup-menu-vision"]').textContent?.includes("No image-capable models. Add a provider key with access to a vision model."));
+		assert.ok(element('[data-testid="setup-menu-vision"]').textContent?.includes("No image-capable models. Connect a provider with access to a vision model."));
 	});
 
 	it("catalog failure uses the approved two-sentence error", async () => {

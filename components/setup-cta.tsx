@@ -34,6 +34,16 @@ export function hasProviderKey(
 	return classifyKeys(statuses, providers).providerRows.some((s) => s.present);
 }
 
+/** Authorization is mode-aware on the server. Its list is authoritative
+ * when present, including an empty list after an OAuth session expires. */
+export function hasProviderAuthorization(
+	statuses: readonly AuthKeyStatus[],
+	providers: readonly ProviderKeyInfo[] | undefined,
+	authorizedProviders?: readonly string[],
+): boolean {
+	return authorizedProviders !== undefined ? authorizedProviders.length > 0 : hasProviderKey(statuses, providers);
+}
+
 /** The zero-keys truth for the calling page: TRUE only after a
  *  successful read says no provider key exists (pending and failed
  *  reads render nothing — the pill must never flash on a gap, and a
@@ -43,9 +53,9 @@ export function useZeroKeys(): boolean {
 	const [zeroKeys, setZeroKeys] = useState(false);
 	const read = useCallback(() => {
 		fetch("/api/keys")
-			.then((r) => r.json())
-			.then((body: { keys?: AuthKeyStatus[]; providers?: ProviderKeyInfo[] }) => {
-				setZeroKeys(!hasProviderKey(body.keys ?? [], body.providers));
+			.then((r) => { if (!r.ok) throw new Error("Provider authorization unavailable"); return r.json(); })
+			.then((body: { keys?: AuthKeyStatus[]; providers?: ProviderKeyInfo[]; authorizedProviders?: string[] }) => {
+				setZeroKeys(!hasProviderAuthorization(body.keys ?? [], body.providers, body.authorizedProviders));
 			})
 			.catch(() => {});
 	}, []);
@@ -69,7 +79,7 @@ export function ZeroKeysPill({ onOpen, inline = false }: { onOpen: () => void; i
 			onClick={onOpen}
 			className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
 		>
-			Add a provider key
+			Connect an AI provider
 		</button>
 	);
 	return inline ? button : <div className="pointer-events-auto mb-2 flex justify-center">{button}</div>;
@@ -85,7 +95,7 @@ export function ZeroKeysPill({ onOpen, inline = false }: { onOpen: () => void; i
 export function strongKeyless(catalog: ModelCatalogResponse | undefined): boolean {
 	const strong = catalog?.slots.strong;
 	if (!strong) return false;
-	return !catalog.providers.some((p) => p.id === strong.model.provider && p.keyPresent);
+	return !catalog.providers.some((p) => p.id === strong.model.provider && (p.authorized ?? p.keyPresent));
 }
 
 /** The strong-slot keyless truth for the PRE-SEND guard (home / /chat/new):

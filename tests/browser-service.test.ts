@@ -26,10 +26,14 @@ describe("browser-service helper (pure halves)", () => {
 		const env = browserServiceSpawnEnv({
 			ELECTRON_RUN_AS_NODE: "1",
 			LH_DEV_URL: "http://localhost:3000",
+			LH_OAUTH_ENCRYPTION_KEY: "fixture-vault-key",
+			lh_oauth_encryption_key: "fixture-case-variant",
 			PATH: "/usr/bin",
 		});
 		assert.equal("ELECTRON_RUN_AS_NODE" in env, false);
 		assert.equal("LH_DEV_URL" in env, false);
+		assert.equal("LH_OAUTH_ENCRYPTION_KEY" in env, false);
+		assert.equal("lh_oauth_encryption_key" in env, false);
 		assert.equal(env.PATH, "/usr/bin");
 	});
 

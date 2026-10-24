@@ -231,7 +231,7 @@ export function toBlobs(feed: ActivityFeed): ActivityBlob[] {
 			activity: isModelsRefusal(job.error)
 				? "needs model setup"
 				: isProviderKeyRefusal(job.error)
-					? "needs a provider key"
+					? "needs a provider connection"
 					: (job.activity ?? ""),
 			model: usage?.model,
 			steps: usage?.steps,
@@ -347,8 +347,8 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 				<ActivityIcon className="size-3" />
 				Background agents
 				{blobs.length > 0 && (
-					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
-						{totalCost === null ? "—" : formatUsd(totalCost)}
+					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="API tariff estimate, not a ChatGPT plan charge">
+						{totalCost === null ? "—" : formatUsd(totalCost)} <span className="text-[10px]">API est.</span>
 				</span>
 				)}
 			</div>
@@ -423,7 +423,7 @@ function ActivityBlobRow({
 					)}
 				</span>
 				<span className="flex shrink-0 items-center gap-2 tabular-nums text-muted-foreground">
-					<span data-testid="activity-blob-cost">{blob.cost === null ? "—" : formatUsd(blob.cost)}</span>
+					<span data-testid="activity-blob-cost" title="API tariff estimate, not a ChatGPT plan charge">{blob.cost === null ? "—" : formatUsd(blob.cost)} <span className="text-[10px]">API est.</span></span>
 					<span data-testid="activity-blob-elapsed">{formatElapsed(now - blob.startedAt)}</span>
 				</span>
 			</button>
@@ -460,11 +460,12 @@ function ActivityBlobRow({
 						</div>
 						{blob.activity && <div className="break-words">{blob.activity}</div>}
 						<div className="flex justify-between gap-2">
-							<span>Cost</span>
+							<span>API estimate</span>
 							<span className="tabular-nums text-card-foreground">
 								{blob.cost === null ? "—" : formatUsd(blob.cost)}
 							</span>
 						</div>
+						<p className="text-[11px]">API tariff equivalent for reported tokens. This is not a charge to your ChatGPT plan.</p>
 						<div className="flex justify-between gap-2">
 							<span>Context</span>
 							<span className="tabular-nums text-card-foreground" data-testid="activity-blob-context">

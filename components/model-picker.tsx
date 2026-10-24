@@ -10,6 +10,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
+import { ChatGPTPlanIndicator } from "@/components/openai-auth";
 
 /** GET /api/models is cached per page load for instant menu opens, but
  *  the federation is LIVE per call — keys saved mid-session widen the
@@ -321,6 +322,7 @@ export function ModelControl({ chatId }: { chatId?: string }) {
 	};
 
 	return (
+		<div className="flex min-w-0 flex-col items-end gap-1.5">
 		<div ref={containerRef} className="relative flex items-center gap-1.5" data-testid="model-control">
 			<Hint
 				// Trimmed (owner, subtlety round 2026-09-25): "Model selector"
@@ -396,7 +398,7 @@ export function ModelControl({ chatId }: { chatId?: string }) {
 						onPick={pickModel}
 						footer={
 							catalog && catalog.models.length === 0
-								? "No models — add a provider key in Keys"
+								? "No models — connect a provider in Keys"
 								: chatId
 									? "This session's model"
 									: "Strong tier — the default for new sessions"
@@ -422,6 +424,8 @@ export function ModelControl({ chatId }: { chatId?: string }) {
 					{error && <div className="mt-1 text-destructive">{error}</div>}
 				</MenuShell>
 			)}
+		</div>
+		<ChatGPTPlanIndicator provider={effectiveProvider} />
 		</div>
 	);
 }

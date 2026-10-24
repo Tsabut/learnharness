@@ -57,6 +57,21 @@ jobs:
           node-version: "26"
           cache: npm
       - run: npm ci
+      - name: OAuth protocol, vault, and desktop security on this OS
+        run: node --import tsx --test --test-concurrency=2 tests/openai-oauth-flow.test.ts tests/openai-credentials.test.ts tests/openai-auth-service.test.ts tests/openai-plan-request.test.ts tests/openai-desktop-security.test.ts tests/desktop-platform.test.ts tests/browser-service-lifetime.test.ts
+        env:
+          NODE_ENV: test
+      - name: Real OS-protected OAuth key persistence (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: node node_modules/electron/cli.js scripts/smoke-oauth-storage.cjs --expect-encrypted
+      - name: Refuse Linux basic_text storage with real Electron
+        if: runner.os == 'Linux'
+        # An isolated native basic_text provider must disable OAuth, not
+        # pretend that fallback encryption protects credentials. No keyring
+        # or host settings are installed or modified by this check. The
+        # no-window probe alone bypasses Chromium's sandbox on CI runners
+        # that prohibit npm Electron's user namespaces (Ubuntu 24.04).
+        run: xvfb-run -a node node_modules/electron/cli.js scripts/smoke-oauth-storage.cjs --linux-basic --expect-unavailable --no-sandbox
       - name: Native renderer tests on this OS
         run: npx electron --import tsx --test tests/pdf-native-render.test.ts tests/pdf-ops.test.ts tests/svg-native-render.test.ts tests/browser-service.test.ts
         env:

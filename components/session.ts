@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { ChatInput, LhMessage, QuestionAnswerData } from "@/src/core";
 import { SessionModel, type SessionState } from "@/components/session-core";
+import { useOpenAIAuth } from "@/components/openai-auth";
 
 export interface UseChatSessionOptions {
 	chatId: string;
@@ -73,6 +74,10 @@ export function useChatSession({ chatId, initialMessages, initiallyInFlight }: U
 
 	// The view + state, derived per model change from the model.
 	const state = useMemo<SessionState>(() => model.getState(), [model, version] as const);
+	const { status: openAIStatus, refresh: refreshOpenAIAuth } = useOpenAIAuth();
+	useEffect(() => {
+		if (state.error && openAIStatus?.mode === "oauth") void refreshOpenAIAuth();
+	}, [state.error?.message, openAIStatus?.mode, refreshOpenAIAuth]);
 
 	// THE TURN-STATE BROADCAST (owner, sidebar round 2026-10-02): the same
 	// optimistic machine, propagated — the instant a turn starts locally

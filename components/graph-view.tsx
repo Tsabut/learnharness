@@ -338,18 +338,19 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 		<div ref={rootRef} className="relative">
 			<Hint
 				// Trimmed (owner, subtlety round 2026-09-25).
-				label="Graph costs — click for details"
+				label="Graph API estimate — click for details"
 				side="bottom"
 			>
 				<button
 				type="button"
+				title="API tariff estimate, not a ChatGPT plan charge"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
 				className={`rounded-lg px-2 py-1 text-xs tabular-nums transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
 			>
-				${displayCostTotals(costs).totalDollars.toFixed(2)}
+				${displayCostTotals(costs).totalDollars.toFixed(2)} <span className="text-[10px]">API est.</span>
 			</button>
 			</Hint>
 			{open && (
@@ -383,7 +384,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 		<div className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
 			<div className="mb-2 flex items-baseline justify-between">
 				<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-					Graph pipeline costs
+					Graph API estimate
 				</span>
 				<span className="text-foreground tabular-nums">
 					${totalDollars.toFixed(2)}
@@ -392,6 +393,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 					)}
 				</span>
 			</div>
+			<p className="mb-2 text-[11px] text-muted-foreground">API tariff equivalent for reported tokens. This is not a charge to your ChatGPT plan.</p>
 			<div className="flex flex-col gap-1">
 				{stageRows.map(([label, stage]) => (
 					<div key={label} className="flex items-baseline justify-between gap-2 text-[11px]">

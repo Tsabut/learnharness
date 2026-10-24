@@ -43,6 +43,9 @@ npx electron-builder --linux --x64 --publish never
 
 - Typecheck, full deterministic test suite, and lint on Ubuntu.
 - Native renderer tests plus standalone build/boot-smoke on macOS (`macos-15`), Windows, and Linux. This macOS job does not compile the Icon Composer asset; only release packaging needs the newer runner.
+- OAuth protocol, rotating-vault, request-isolation and desktop-security tests on each of those three build OSes. Real Electron storage smoke requires DPAPI/Keychain persistence on Windows/macOS; Linux uses Xvfb to verify that `basic_text` refuses OAuth without creating a vault key. This Linux check confirms safe refusal, not secure-keyring availability; see [OpenAI platform verification](openai-chatgpt-auth.md#ci-and-platform-storage-checks).
+
+CI has read-only repository permissions and publishes nothing, including when run manually on a fork.
 
 `.github/workflows/release.yml` has two deliberately separate modes:
 

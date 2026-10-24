@@ -137,6 +137,9 @@ export function browserServiceSpawnEnv(
 	const out: Record<string, string | undefined> = { ...env };
 	delete out.ELECTRON_RUN_AS_NODE;
 	delete out.LH_DEV_URL;
+	for (const name of Object.keys(out)) {
+		if (name.toUpperCase() === "LH_OAUTH_ENCRYPTION_KEY") delete out[name];
+	}
 	return out;
 }
 
@@ -257,6 +260,7 @@ async function withBrowserPage<T>(fn: (page: import("puppeteer-core").Page) => P
 	const executablePath = resolveChromeExecutablePath();
 	const browser = await puppeteer.launch({
 		headless: true,
+		env: browserServiceSpawnEnv(process.env),
 		// Explicit path when we found one; otherwise let puppeteer resolve the
 		// system Chrome install itself via the "chrome" channel.
 		...(executablePath ? { executablePath } : { channel: "chrome" as const }),

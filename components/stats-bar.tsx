@@ -125,7 +125,7 @@ export function StatsBar({
 					{ctx ? (ctx.limit !== null ? `${formatTokens(ctx.usedTokens)} / ${formatTokens(ctx.limit)}` : formatTokens(ctx.usedTokens)) : "—"}
 				</span>
 				<span aria-hidden>·</span>
-				<span data-testid="stats-cost">{costLabel}</span>
+				<span data-testid="stats-cost" title="API tariff estimate, not a ChatGPT plan charge">{costLabel} <span className="text-[10px]">API est.</span></span>
 			</button>
 				{open && (
 					<div
@@ -143,9 +143,10 @@ export function StatsBar({
 								</span>
 							</div>
 							<div className="flex justify-between gap-2">
-								<span>Total cost</span>
+								<span>API estimate</span>
 								<span className="tabular-nums text-card-foreground">{costLabel}</span>
 							</div>
+							<p className="text-[11px]">API tariff equivalent for reported tokens. This is not a charge to your ChatGPT plan.</p>
 							{unpriced > 0 && (
 								<div className="flex justify-between gap-2">
 									<span>Unpriced turns</span>

@@ -12,6 +12,8 @@ import type { BackgroundModelRole, ModelSlotName } from "../settings.ts";
  *  pi-ai's catalog. Costs are USD per 1M tokens (the same catalog, the same
  *  units core/prices.ts's generated table carries). */
 export interface ModelCatalogEntry {
+	/** API prices are estimates; ChatGPT plan requests use subscription billing. */
+	billing?: "api" | "subscription";
 	id: string;
 	name: string;
 	provider: string;
@@ -77,6 +79,9 @@ export interface ModelCatalogResponse {
 
 /** One row of the providers surface. */
 export interface CatalogProvider {
+	/** Authoritative availability including selected OAuth auth, when supplied. */
+	authorized?: boolean;
+	authMode?: "api_key" | "oauth";
 	id: string;
 	/** The env var whose presence federates this provider in. */
 	envVar: string;

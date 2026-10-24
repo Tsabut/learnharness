@@ -24,12 +24,13 @@
  *     would shadow every settings-page key change until restart.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, session, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, session, shell, dialog, safeStorage } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const { configureUserData, childDataPaths, loadOrCreateOAuthKey, oauthChildEnvironment, attachOAuthBrowserIPC } = require("./oauth-security.cjs");
 
 // Mirrors SIDEBAR_AUTOCLOSE in components/sidebar.tsx — keep in sync (the
 // renderer owns the number; this is the IPC widen target).
@@ -44,8 +45,8 @@ const PRODUCT_NAME = "LearnHarness";
 // Must run before the LH_DEV_URL suffix below — dev becomes
 // "LearnHarness-dev".
 app.setName(PRODUCT_NAME);
-const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
-const DATA_DIR = () => path.join(app.getPath("userData"), "data");
+const AUTH_FILE = () => childDataPaths(app.getPath("userData")).authFile;
+const DATA_DIR = () => childDataPaths(app.getPath("userData")).dataDir;
 
 /** The packaged standalone server (extraResources → Resources/server).
  *  In dev LH_DEV_URL short-circuits everything: no spawn, no packaging —
@@ -106,9 +107,9 @@ if (process.argv.includes("--browser-service")) {
 	// its own userData so (a) the single-instance lock — checked below — doesn't
 	// silently kill it, and (b) it never reads/writes the real app's
 	// localStorage, auth.json, or logs. Must run before the lock check.
-	if (process.env.LH_DEV_URL) {
-		app.setPath("userData", `${app.getPath("userData")}-dev`);
-	}
+	// Explicit LH_USER_DATA_DIR isolates smoke tests from an installed app and
+	// takes precedence over the dev suffix. Electron requires the dir to exist.
+	configureUserData(app);
 
 	// The whole normal boot — lock included — lives in this else: a helper is
 	// a SECOND instance of this very binary on purpose (the running app owns
@@ -183,7 +184,7 @@ function log(line) {
 	}
 }
 
-function startServer(port) {
+function startServer(port, oauthEncryptionKey) {
 	return new Promise((resolve, reject) => {
 		const child = spawn(
 			process.execPath,
@@ -191,7 +192,7 @@ function startServer(port) {
 			{
 				cwd: path.dirname(serverEntry()),
 				env: {
-					...process.env,
+					...oauthChildEnvironment(process.env, oauthEncryptionKey),
 					ELECTRON_RUN_AS_NODE: "1",
 					NODE_ENV: "production",
 					PORT: String(port),
@@ -202,14 +203,18 @@ function startServer(port) {
 					// settings-page key change until restart; env wins over file).
 					LH_AUTH_FILE: AUTH_FILE(),
 				},
-				stdio: ["ignore", "pipe", "pipe"],
+				// OAuth browser opening travels only between main and this child.
+				stdio: ["ignore", "pipe", "pipe", "ipc"],
+				windowsHide: true,
 			},
 		);
 		serverProcess = child;
+		const detachOAuthIPC = attachOAuthBrowserIPC(child, (url) => shell.openExternal(url));
 		const fwd = (buf) => buf.toString().trimEnd().split("\n").forEach((l) => l && log(`server: ${l}`));
 		child.stdout.on("data", fwd);
 		child.stderr.on("data", fwd);
 		child.on("exit", (code, signal) => {
+			detachOAuthIPC();
 			log(`server exited (code=${code} signal=${signal})`);
 			serverProcess = null;
 		});
@@ -563,9 +568,13 @@ async function main() {
 	const devUrl = process.env.LH_DEV_URL;
 	const url = devUrl ?? `http://127.0.0.1:${await freePort()}`;
 	if (!devUrl) {
+		const oauthEncryptionKey = await loadOrCreateOAuthKey({
+			userDataDir: app.getPath("userData"), safeStorage,
+		});
+		if (!oauthEncryptionKey) log("OAuth secure storage unavailable; ChatGPT sign-in disabled");
 		log(`starting server: ${serverEntry()}`);
 		log(`data dir: ${DATA_DIR()}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
-		await startServer(new URL(url).port);
+		await startServer(new URL(url).port, oauthEncryptionKey);
 		await waitUntilUp(url);
 		log(`server up: ${url}`);
 	} else {

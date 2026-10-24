@@ -47,6 +47,7 @@ import { ProviderMenuList } from "@/components/settings/model-menu";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
 import { ThinkingMenuList } from "@/components/settings/model-menu";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { OpenAIAuthSection } from "@/components/settings/openai-auth-section";
 
 /** The pickers' slot identity — same roster language as the Agent
  *  section's slot rows. */
@@ -60,7 +61,7 @@ const SLOT_ORDER: readonly ModelSlotName[] = ["strong", "cheap", "vision"];
 /** The GET /api/models response fields the flow consumes. */
 interface ModelsBody {
 	models: ModelCatalogEntry[];
-	providers: { id: string; keyPresent: boolean }[];
+	providers: { id: string; keyPresent: boolean; authorized?: boolean }[];
 	/** The three tiers' RESOLVED pins (BYOK: NULL per unset tier) — the
 	 *  PREFILL + "needed" marks (owner, 2026-09-22): pinned tiers open
 	 *  with their pick, unpinned tiers carry the mark. */
@@ -70,10 +71,10 @@ interface ModelsBody {
 /** Pure: which stage the flow opens at — no keyed provider = keys first
  *  (owner's dependency ordering). Exported for tests. */
 export function setupStage(
-	providers: { id: string; keyPresent: boolean }[] | null,
+	providers: { id: string; keyPresent: boolean; authorized?: boolean }[] | null,
 ): "keys" | "pickers" {
 	if (providers === null) return "keys"; // fetch failed → the honest fallback
-	return providers.some((p) => p.keyPresent) ? "pickers" : "keys";
+	return providers.some((p) => p.authorized ?? p.keyPresent) ? "pickers" : "keys";
 }
 
 /** Prefill (owner, BYOK wave 2026-09-22): each pinned tier opens with its
@@ -145,11 +146,23 @@ export function SetupKeysBody({
 	/** The MenuShell anchor — wired by the wrapper (its triggerRef). */
 	menuAnchor: React.RefObject<HTMLDivElement | null>;
 }) {
+	const apiKeyEditor = provider && (
+		<div className="flex max-w-96 items-center gap-2">
+			<input type="password" value={value} onChange={(e) => onValue(e.target.value)}
+				onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) onSave(); }}
+				placeholder="Paste key…" aria-label={`${provider.label} key`} data-testid="setup-key-input" disabled={saving} autoFocus
+				className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-background px-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50" />
+			<button type="button" onClick={onSave} disabled={saving || !value.trim()} data-testid="setup-key-save"
+				className="shrink-0 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40">
+				{saving ? "Saving…" : "Save key"}
+			</button>
+		</div>
+	);
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
-			<p className="text-sm text-foreground">Add a provider key.</p>
+			<p className="text-sm text-foreground">Connect an AI provider.</p>
 			<p className="text-xs text-muted-foreground">
-				Choose your AI provider and paste its API key. You’ll pick your models next.
+				Choose your AI provider. Use an API key or sign in with ChatGPT for OpenAI, then pick your models.
 			</p>
 			<div className="flex flex-col gap-2">
 				<div ref={menuAnchor} className="relative max-w-96">
@@ -178,33 +191,7 @@ export function SetupKeysBody({
 						</MenuShell>
 					)}
 				</div>
-				{provider && (
-					<div className="flex max-w-96 items-center gap-2">
-						<input
-							type="text"
-							value={value}
-							onChange={(e) => onValue(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" && value.trim()) onSave();
-							}}
-							placeholder="Paste key…"
-							aria-label={`${provider.label} key`}
-							data-testid="setup-key-input"
-							disabled={saving}
-							autoFocus
-							className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-background px-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
-						/>
-						<button
-							type="button"
-							onClick={onSave}
-							disabled={saving || !value.trim()}
-							data-testid="setup-key-save"
-							className="shrink-0 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
-						>
-							{saving ? "Saving…" : "Save key"}
-						</button>
-					</div>
-				)}
+				{provider?.id === "openai" ? <OpenAIAuthSection apiKeyEditor={apiKeyEditor} /> : apiKeyEditor}
 				{error && (
 					<p role="alert" data-testid="setup-key-error" className="text-xs text-red-400">
 						{error}
@@ -520,7 +507,7 @@ export function SetupDialog({
 															}));
 															setOpenMenu(null);
 														}}
-														footer={catalog && catalog.length === 0 ? "No image-capable models. Add a provider key with access to a vision model." : undefined}
+														footer={catalog && catalog.length === 0 ? "No image-capable models. Connect a provider with access to a vision model." : undefined}
 													/>
 												</MenuShell>
 											)}

@@ -78,7 +78,7 @@ describe("activity dock pure layer", () => {
 		assert.equal(absent.cost, null);
 	});
 
-	it("a key-refused job reads as info — 'needs a provider key' (zero-keys wave, 66dbea9)", () => {
+	it("an auth-refused job reads as info with a provider connection action", () => {
 		const refused = job({
 			status: "error",
 			activity: "failed",
@@ -86,7 +86,7 @@ describe("activity dock pure layer", () => {
 			error: "No OpenRouter key is set — add one in Settings → Keys",
 		});
 		const blob = toBlobs({ jobs: [refused], extractions: [] })[0]!;
-		assert.equal(blob.activity, "needs a provider key");
+		assert.equal(blob.activity, "needs a provider connection");
 	});
 
 	it("a models-refused job reads as info — 'needs model setup', not 'failed' (BYOK, 2026-09-22)", () => {
@@ -210,12 +210,13 @@ describe("activity section render", () => {
 		assert.match(html, /building sandbox…/);
 		assert.match(html, /Extraction — merging/);
 		// Unpriced job → "—", never $0.0000 (doctrine); both blobs show it.
-		assert.match(html, /activity-blob-cost[^>]*>—</);
+		assert.match(html, /activity-blob-cost[^>]*>— <span[^>]*>API est\.<\/span>/);
 		assert.match(html, /data-testid="activity-abort"/, "END on the blob face, popover-independent");
 		assert.match(html, /\bEnd\b/, "the explicit END button");
 		assert.match(html, /Background agents/);
 		// Total cost: nothing priced → "—" in the header.
-		assert.match(html, /activity-total-cost[^>]*>—</);
+		assert.match(html, /activity-total-cost[^>]*>— <span[^>]*>API est\.<\/span>/);
+		assert.match(html, /API tariff estimate, not a ChatGPT plan charge/);
 		// Truncation-reveals KEEP native title (tooltip wave mechanism rule):
 		// the truncated activity + title spans carry title= — a styled
 		// tooltip adds nothing over an ellipsis reveal.
@@ -246,6 +247,6 @@ describe("activity section render", () => {
 		);
 		// two identical priced jobs → 2 × $0.002 = $0.0040 total (pi prices,
 		// glm-5.3-flash drifted in pi-ai 0.87.1)
-		assert.match(html, /activity-total-cost[^>]*>\$0\.0040</);
+		assert.match(html, /activity-total-cost[^>]*>\$0\.0040 <span[^>]*>API est\.<\/span>/);
 	});
 });

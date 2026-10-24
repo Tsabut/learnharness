@@ -16,10 +16,11 @@
  * file, and `shadowedByEnv` explains why a saved key is not the live one
  * (env always wins).
  */
-import { keyStatuses, providerKeyList } from "@/src/server";
+import { keyStatuses, providerKeyList, providerKeyPresent } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-	return Response.json({ keys: keyStatuses(), providers: providerKeyList() });
+	const providers = providerKeyList();
+	return Response.json({ keys: keyStatuses(), providers, authorizedProviders: providers.filter((provider) => providerKeyPresent(provider.id)).map((provider) => provider.id) });
 }

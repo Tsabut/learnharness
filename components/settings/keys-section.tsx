@@ -29,6 +29,7 @@ import { SettingsGroup } from "./controls.tsx";
 import { ProviderMenuList } from "./model-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { OpenAIAuthSection } from "./openai-auth-section.tsx";
 
 /** One pi-ai provider with plain API-key auth (the Platform seam —
  *  derived from pi-ai's own env-key table; no drift possible). */
@@ -400,6 +401,9 @@ export function KeysSection({
 	}
 
 	const { providerRows, toolRows, unknownRows, addable } = classifyKeys(statuses, providers);
+	const openaiStatus = statuses.find((status) => status.id === "OPENAI_API_KEY") ?? {
+		id: "OPENAI_API_KEY", info: null, present: false, masked: null, source: "none" as const, shadowedByEnv: false,
+	};
 
 	async function saveNewProvider(p: ProviderKeyInfo, value: string) {
 		const err = await saveKey(p.envVar, value);
@@ -413,7 +417,13 @@ export function KeysSection({
 	return (
 		<>
 			<SettingsGroup label="Model providers" testid="group-provider-keys">
-				{providerRows.map((status) => (
+				<OpenAIAuthSection apiKeyEditor={
+					<KeyTableRow label="API key" status={openaiStatus} expanded={openRow === "OPENAI_API_KEY"}
+						onToggle={() => setOpenRow(openRow === "OPENAI_API_KEY" ? null : "OPENAI_API_KEY")}
+						onSave={async (value) => { const error = await saveKey("OPENAI_API_KEY", value); if (!error) setOpenRow(null); return error; }}
+						onCancel={() => setOpenRow(null)} onDelete={() => deleteKey("OPENAI_API_KEY")} testid="key-openai_api_key" />
+				} />
+				{providerRows.filter((status) => status.id !== "OPENAI_API_KEY").map((status) => (
 					<KeyTableRow
 						key={status.id}
 						label={providers?.find((p) => p.envVar === status.id)?.label ?? status.info?.label ?? status.id}
@@ -433,7 +443,7 @@ export function KeysSection({
 				))}
 				{providers !== undefined && (
 					<AddProviderRow
-						addable={addable}
+						addable={addable.filter((provider) => provider.id !== "openai")}
 						onPick={(p) => {
 							setAdding(p);
 							setAddError(null);

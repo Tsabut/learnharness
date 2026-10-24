@@ -1,4 +1,4 @@
-import { modelCatalog } from "@/src/server";
+import { modelCatalog, openAIAuthService } from "@/src/server";
 
 /**
  * The model picker's data (model-control wave): pi-ai's configured-provider
@@ -7,5 +7,6 @@ import { modelCatalog } from "@/src/server";
  * catalog: no network, stable within a pi-ai version.
  */
 export async function GET() {
+	try { await openAIAuthService().refreshModels(); } catch { /* OAuth status contains a safe recovery message; never substitute a static account list. */ }
 	return Response.json(modelCatalog());
 }

@@ -23,6 +23,7 @@ import { piModels } from "../agent/models.ts";
 import { settingsStore } from "../store/settings.ts";
 import { effectiveSettings } from "./stores.ts";
 import { keyValue } from "./keys.ts";
+import { openAIAuthService } from "./openai-auth.ts";
 import type { ChatSettings } from "../core/contracts/chat.ts";
 import type {
 	CatalogDefaults,
@@ -121,10 +122,12 @@ export function catalogSlots(): SlotPins {
  *  with keyPresent read env-wins through the keys seam, fresh per call —
  *  saving a key immediately federates the provider into the picker. */
 export function catalogProviders(): CatalogProvider[] {
+	const openai = openAIAuthService().status();
 	return AUTH_PROVIDER_KEYS.map((p) => ({
 		id: p.id,
 		envVar: p.envVar,
 		keyPresent: keyValue(p.envVar) !== undefined,
+		...(p.id === "openai" ? { authorized: openai.authorized, authMode: openai.mode } : {}),
 	})).sort((a, b) => a.id.localeCompare(b.id));
 }
 
@@ -132,7 +135,13 @@ export function catalogProviders(): CatalogProvider[] {
  *  these (a keyless provider's models are unreachable by design; the
  *  Keys page is the discovery surface, same discipline as search). */
 function keyedProviderIds(): Set<string> {
-	return new Set(catalogProviders().filter((p) => p.keyPresent).map((p) => p.id));
+	return new Set(catalogProviders().filter((p) => p.authorized ?? p.keyPresent).map((p) => p.id));
+}
+
+/** OAuth choices come from the actual account list intersected with engine-supported models. */
+function providerModels(provider: string): readonly Model<Api>[] {
+	const models = piModels().getModels(provider);
+	return provider === "openai" ? openAIAuthService().availableModels(models) : models;
 }
 
 /** Project one catalog model to the client DTO. */
@@ -167,7 +176,7 @@ export function catalogContextLimits(): Map<string, number> {
 	const index = new Map<string, number>();
 	for (const provider of piModels().getProviders()) {
 		if (!keyed.has(provider.id)) continue;
-		for (const model of piModels().getModels(provider.id)) {
+		for (const model of providerModels(provider.id)) {
 			index.set(`${provider.id}:${model.id}`, model.contextWindow);
 		}
 	}
@@ -183,9 +192,9 @@ export function modelCatalog(): ModelCatalogResponse {
 	const models = piModels()
 		.getProviders()
 		.filter((p) => keyed.has(p.id))
-		.flatMap((p) => piModels().getModels(p.id))
-		.map(toModelDto)
-		.sort((a, b) => (a.provider === b.provider ? a.id.localeCompare(b.id) : a.provider.localeCompare(b.provider)));
+		.flatMap((p) => providerModels(p.id))
+		.map((model) => ({ ...toModelDto(model), ...(model.provider === "openai" && openAIAuthService().mode() === "oauth" ? { billing: "subscription" as const } : {}) }))
+		.sort((a, b) => (a.provider === b.provider ? a.provider === "openai" && openAIAuthService().mode() === "oauth" ? 0 : a.id.localeCompare(b.id) : a.provider.localeCompare(b.provider)));
 	return {
 		models,
 		defaults: catalogDefaults(),
@@ -216,6 +225,9 @@ export function validateChatSettings(settings: ChatSettings): SettingsValidation
 		if (!piModels().getModel(provider, id)) {
 			return { ok: false, error: `No model "${id}" in the ${provider} catalog` };
 		}
+		if (provider === "openai" && openAIAuthService().mode() === "oauth" && !providerModels(provider).some((model) => model.id === id)) {
+			return { ok: false, error: "This model is not available for the selected ChatGPT account. Refresh Settings → Models and choose an available model." };
+		}
 	}
 	// BYOK interlude (owner, 2026-09-22): thinking levels NEVER reject a
 	// write — a model swap with a pinned level JUST WORKS. The WRITE clamps
@@ -245,6 +257,9 @@ function validateSlotSpec(name: ModelSlotName, slot: { model?: { provider: strin
 		}
 		if (!piModels().getModel(provider, id)) {
 			return { ok: false, error: `No model "${id}" in the ${provider} catalog` };
+		}
+		if (provider === "openai" && openAIAuthService().mode() === "oauth" && !providerModels(provider).some((model) => model.id === id)) {
+			return { ok: false, error: "This model is not available for the selected ChatGPT account. Refresh Settings → Models and choose an available model." };
 		}
 	}
 	// BYOK interlude (owner, 2026-09-22): the supported-level verdict is
